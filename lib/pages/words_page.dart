@@ -1,98 +1,144 @@
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
+import 'dart:async';
+import 'package:lwd/models/Word.dart';
+import 'package:lwd/pages/detail_page.dart';
+import 'package:lwd/pages/details_page.dart';
+import 'package:lwd/services/Services.dart';
 import 'dart:convert';
+import 'package:http/http.dart' as http;
+import 'package:flutter_tts/flutter_tts.dart';
+
 
 class WordsPage extends StatefulWidget {
   WordsPage({Key key}) : super(key: key);
 
+  final String title = "Words";
+
   @override
   _WordsPageState createState() => _WordsPageState();
-}
+} 
+
+enum TtsState { playing, stopped, paused, continued }
 
 class _WordsPageState extends State<WordsPage> {
 
-   var wordsUrl = "http://api.loveworlddictionary.org/words/all.php";
-  //var wordsUrl = 'https://jsonplaceholder.typicode.com/photos';
-  Map mapResponse;
-  List wordsList;
+  String _newVoiceText;
 
+  TtsState ttsState = TtsState.stopped;
 
+  get isPlaying => ttsState == TtsState.playing;
 
-    Future fetchData()async {
-      http.Response response;
-      response = await http.get(wordsUrl);
+  get isStopped => ttsState == TtsState.stopped;
 
+  get isPaused => ttsState == TtsState.paused;
 
-      // Map<String, dynamic> map = json.decode(response.body);
-      // List<dynamic> wordsList = map["records"];
-      
-      if (response.statusCode == 200) {
-         setState(() {
-        mapResponse = json.decode(response.body);
-        wordsList = mapResponse['records'];
-      });
-      }
-     
-      // print(wordsList[10]['word']);
-      //print(wordsList);
+  get isContinued => ttsState == TtsState.continued;
+
+  List<Word> words = List();
+  List<Word> filteredWords = List();
+
+  @override
+      final FlutterTts flutterTts = FlutterTts();
+
+    Future stopMeaning() async {
+      var result = await flutterTts.stop();
+      if (result == 0) setState(() => ttsState = TtsState.stopped);
     }
 
-  @override
   void initState() {
-    fetchData();
+    stopMeaning();
     super.initState();
+    WordServices.getWords().then((wordsFromServer) {
+      setState(() {
+        stopMeaning();
+        words = wordsFromServer;
+        filteredWords = words;
+      });
+    });
   }
-
-  @override
-  void dispose() {
-    super.dispose();
-  }
+  
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-       appBar: AppBar(
-         title: Text("Words"),
-         actions: <Widget>[
-           InkWell(
-             child: SizedBox(
-               width: 100.0,
-               child: Icon(
-                 Icons.search,
-                 
-                 ),
 
-                 
-             ),
-           ),
-           
-         ],
-         
-       ),
-       
-       body: 
-       
-       mapResponse != null ?ListView.builder(
-            itemBuilder: (context,index){
-              return Padding(
-                padding: const EdgeInsets.only(left: 6.0),
-                
-                child: ListTile(
-                  dense: true,
-                  
-                   title: Text(wordsList[index]['word'],
-                   
-                   style: TextStyle(
-                     fontSize: 24,
-                     fontWeight: FontWeight.bold 
-                   ),
-                   )
+
+
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(widget.title),
+      ),
+      body: Column(
+        children: <Widget>[
+          
+          Padding(
+            padding: const EdgeInsets.all(8.0),
+            child: TextField(
+              decoration: InputDecoration(
+                border: OutlineInputBorder(
+                  borderRadius: const BorderRadius.all(
+                    const Radius.circular(5.0,
+                    ),
+                  ),
                 ),
-              );
-            },
-            itemCount: wordsList.length,
-            )
-          : Center(child: CircularProgressIndicator(),
+                filled: true,
+                fillColor: Colors.white60,
+                contentPadding: EdgeInsets.all(15.0),
+                hintText: 'Search Words'
+              ),
+              onChanged: (string) {
+                //
+                setState(() {
+                  filteredWords = words.where((w) => 
+                  (w.word.toLowerCase().contains(string.toLowerCase())),
+                  ).toList();
+                });
+              },
+            ),
+          ),
+          
+          Expanded(
+            child: ListView.builder(
+              padding: EdgeInsets.all(8.0),
+              itemCount: filteredWords.length,
+              itemBuilder: (BuildContext context, int index) {
+                if (filteredWords.length == 0){
+               return Container(
+                 child: Column(
+                   children: <Widget>[
+                     Center(
+                       child: CircularProgressIndicator(),
+                      ),
+                   ],
+                 ),
+                );
+            } else {
+                return Card(
+                  child: InkWell(
+                    child: Padding(
+                      padding: EdgeInsets.all(8.0),
+                      child: Text(filteredWords[index].word,
+                       style: TextStyle(
+                          fontSize: 18.0,
+                          fontWeight: FontWeight.bold,
+                      ),
+                     ), 
+                    ),
+                    onTap: (){
+                       Navigator.push(
+                         context, 
+                         new MaterialPageRoute(
+                           builder: (context) => DetailsPage(filteredWords[index])
+                           ),
+                         );
+                     },
+                  ),
+                  
+                );
+               }
+              },
+            ),
+          ),
+        ],
       ),
     );
   }
